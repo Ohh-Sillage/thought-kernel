@@ -9,7 +9,7 @@ Both images are real renders of `demo/index.html` in headless Chrome — not moc
 
 ## Why the hero is a composite, not one screenshot
 
-A single full-page shot at readable size is ~1130 px tall, which pushes the first paragraph below the fold. The composite is 776 × 661 and still shows the actual transformation: one line in, a constrained prompt out. Both halves are crops of the same render — neither is a redraw.
+A single full-page shot at readable size is ~1130 px tall, which pushes the first paragraph below the fold. The composite is 792 × 678 and still shows the actual transformation: one line in, a constrained prompt out. Both halves are crops of the same render — neither is a redraw.
 
 ## How they were made
 

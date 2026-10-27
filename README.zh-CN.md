@@ -16,7 +16,7 @@
 ---
 
 <div align="center">
-  <a href="demo/index.html"><img src="docs/images/demo.png" width="760" alt="上：一句需求，场景被识别为「计划」。下：它生成的增强提示词，其中注入了红队、反向采访、任务盲点扫描。"></a>
+  <a href="demo/index.html"><img src="docs/images/demo.png" width="792" alt="上：一句需求，场景被识别为「计划」。下：它生成的增强提示词，其中注入了红队、反向采访、任务盲点扫描。"></a>
   <br>
   <sub>一句需求进去，一份带约束的提示词出来。全部在浏览器里跑——不装东西，不联网。</sub>
 </div>

@@ -16,7 +16,7 @@
 ---
 
 <div align="center">
-  <a href="demo/index.html"><img src="docs/images/demo.png" width="760" alt="Top: a one-line request, with the scenario detected as Planning. Bottom: the enhanced prompt it produced, with red team, reverse interview and blind-spot scan injected."></a>
+  <a href="demo/index.html"><img src="docs/images/demo.png" width="792" alt="Top: a one-line request, with the scenario detected as Planning. Bottom: the enhanced prompt it produced, with red team, reverse interview and blind-spot scan injected."></a>
   <br>
   <sub>One line in. A constrained prompt out. The whole thing runs in your browser — no install, no network.</sub>
 </div>
