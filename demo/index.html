@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ThoughtKernel · 思想内核 — prompt compiler</title>
+<style>
+  :root {
+    --ink: #18181b; --muted: #71717a; --line: #e4e4e7;
+    --bg: #fafafa; --card: #ffffff; --primary: #1d4ed8; --primary-soft: #dbeafe;
+    --ok: #15803d; --warn: #b45309;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--ink);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: .01em; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; margin-bottom: 12px;
+  }
+  .label { font-size: 11px; color: var(--muted); margin-bottom: 8px; letter-spacing: .04em; }
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mode {
+    flex: 1 1 150px; text-align: left; border: 1px solid var(--line); background: #fff;
+    border-radius: 10px; padding: 9px 11px; cursor: pointer; color: var(--ink);
+  }
+  .mode b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .mode small { color: var(--muted); font-size: 11px; line-height: 1.4; display: block; }
+  .mode.on { border-color: var(--primary); background: var(--primary-soft); }
+  .mode.on b { color: var(--primary); }
+  textarea {
+    width: 100%; min-height: 92px; resize: vertical; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 10px; font: inherit; color: var(--ink);
+    background: #fff;
+  }
+  textarea:focus { outline: 2px solid var(--primary-soft); border-color: var(--primary); }
+  .detect { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+  .detect b { color: var(--warn); font-weight: 600; }
+  .group { font-size: 11px; color: var(--muted); margin: 12px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; border-radius: 8px;
+    padding: 5px 9px; font-size: 12px; cursor: pointer; color: var(--ink);
+  }
+  .chip small { color: var(--muted); font-size: 10px; margin-left: 4px; }
+  .chip.on { border-color: #3b82f6; background: var(--primary-soft); color: #1e3a8a; }
+  .chip.auto { border-style: dashed; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .btn {
+    border: 0; border-radius: 9px; padding: 9px 16px; font: inherit; cursor: pointer;
+    background: var(--primary); color: #fff;
+  }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { font-size: 11px; color: var(--muted); margin-left: auto; }
+  pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12.5px;
+    line-height: 1.65; background: #fff; border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; max-height: 340px; overflow: auto;
+  }
+  .sysbox { margin-top: 10px; }
+  .sysbox summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: #18181b; color: #fff; padding: 9px 16px; border-radius: 999px;
+    font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.on { opacity: 1; }
+  @media (min-width: 700px) {
+    body { padding: 28px; }
+    h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ThoughtKernel · 思想内核</h1>
+  <div class="sub">选模式 → 选思想（或让场景自动识别）→ 生成增强提示词 → 粘贴给模型<br><span style="font-size:11px">Thoughts are the kernel. Skills are just drivers.</span></div>
+
+  <div class="card">
+    <div class="label">提示词模式</div>
+    <div class="modes" id="modes"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">原始请求</div>
+    <textarea id="input" placeholder="例如：请帮我设计一个旅游网站"></textarea>
+    <div class="detect" id="detect">输入后自动识别场景</div>
+  </div>
+
+  <div class="card">
+    <div class="label">附加思想（可多选，虚线为自动推荐）</div>
+    <div class="group">人类侧 · 改造提问与交互方式</div>
+    <div class="chips" id="humanChips"></div>
+    <div class="group">机器侧 · 内部推理指令（不进入提示词正文）</div>
+    <div class="chips" id="machineChips"></div>
+    <div class="row">
+      <button class="btn" id="gen">生成增强提示词</button>
+      <button class="btn ghost" id="clear">清空选择</button>
+      <span class="hint" id="cap"></span>
+    </div>
+  </div>
+
+  <div class="card" id="outCard" hidden>
+    <div class="label">增强提示词（人类侧段落）</div>
+    <pre id="out"></pre>
+    <div class="row">
+      <button class="btn" id="copy">复制</button>
+      <span class="hint" id="stat"></span>
+    </div>
+    <details class="sysbox">
+      <summary>查看机器侧注入指令（静默部分）</summary>
+      <pre id="sys" style="margin-top:8px"></pre>
+    </details>
+  </div>
+</div>
+<div class="toast" id="toast">已复制</div>
+
+<script>
+"use strict";
+
+// id, 名称, 侧, 模式, 完整模板, 短指令
+const T = [
+  ["H1","费曼学习法","human","interactive","我刚学完【概念】，请陪我完成三轮学习。第一轮你扮演完全不懂这个领域的小白，我用自己的话讲给你听，听不懂就打断我。第二轮你扮演专家或辩手，尖锐批判我的理解，重点查边界、缺点、风险和成立前提。第三轮我们把这个概念用到真实问题里。不要一开始就替我讲答案，每轮完成后再进入下一轮。","我讲你听，卡住就打断，再让专家挑错，最后一起用。"],
+  ["H2","苏格拉底追问","human","interactive","我先说自己的看法。你每次只问我一个问题，围绕我的依据、证据、前提、反例、边界和影响继续追问，我回答后再继续。等我把思路理清楚、说清楚后，再帮我总结。","每次只问一个问题，追我的依据和前提，最后总结。"],
+  ["H3","寓言学习","human","interactive","请把【概念】编成一个故事，先讲故事不要揭示概念；故事结束后揭示真正的概念，逐一对应故事元素与概念要素，并说明这个类比在哪些地方会失效。","用寓言讲概念，结尾再揭示，并说明类比在哪里失效。"],
+  ["H4","反向采访","human","interactive","先别急着做。看看我还少说了哪些会影响结果的信息，一次问我一个最重要的问题。等你已经知道我要什么、有哪些要求不能碰、我会怎样判断做得好不好，就把完整需求重新说一遍让我确认，确认完再开始。","先问我缺哪些关键信息，一次一个，复述确认后再做。"],
+  ["H5","任务盲点扫描","human","wrap","先不要执行。找出我没有提到、但可能改变最终结果的问题，按影响程度排序并说明理由。需要我判断的地方一次问我一个；没有证据支持的内容标成假设，不要替我下结论。","先别做，列出我没提到但影响结果的问题，按影响排序。"],
+  ["H6","重大决定正反论证","human","wrap","围绕我要不要做【决定】，分别给出支持和反对它的最强论证。不要替我下结论，请区分可验证的事实、未经确认的假设和仍然缺少的信息，最后给出三个成本较低的现实测试。","给出支持和反对的最强论证，不替我决定。"],
+  ["H7","AI 自我扫描","human","wrap","请读取你能够访问的历史对话和关于我的记忆，根据我反复提到、下意识回避或说过要做却一直没行动的内容，生成 10 个我可能最不愿面对但值得回答的问题，每个问题说明来自哪些对话证据。不要鼓励我，不要做心理诊断，也不要替我回答。","从历史记录里找出我回避的事，生成 10 个难回答的问题。"],
+  ["H8","历史记录复盘","human","wrap","请读取你能够访问的历史任务与项目记录，找出我反复执行的工作、经常返工的位置和反复补充的要求，挑出三个最值得封装成工作流的项目，说明原因、使用场景、关键步骤和验收标准。先给建议，等我选中后再创建。","从历史任务里找重复劳动和返工点，给出三个可封装的流程。"],
+  ["H9","红队 / 事前验尸","human","wrap","在【方案】执行前，以对抗性视角系统性找出它最可能失败的 3 种方式，按发生概率与损失排序；针对每种失败方式给出规避或缓解措施。","设想它最可能失败的三种方式，并给规避办法。"],
+  ["H10","清单 / 检查表","human","wrap","请为【流程】生成一份外化检查清单，把高认知负荷下容易遗漏的关键步骤列成固定序列，并标注每个步骤的常见遗漏后果。","列出易漏步骤的固定清单和遗漏后果。"],
+  ["H11","间隔与检索失败驱动","human","wrap","请为【学习主题】设计间隔复习计划：复习点安排在接近遗忘的时间（如 1/3/7/21 天），每轮先自测提取再补漏；标注哪些内容适合集中训练、哪些适合间隔。","按 1/3/7/21 天安排复习，每轮先自测再补漏。"],
+  ["H12","元认知监控","human","wrap","任务结束后，对刚才的过程做二阶评估：当前策略哪里有效、哪里低效、哪些认知资源被浪费，并给出下一次的修正建议。","事后评估这个策略哪里低效，下次怎么改。"],
+  ["H13","路径依赖与锁定识别","human","wrap","在【决策】前，请识别我当前方案中由沉没成本、递增收益或协调惯性形成的路径依赖点；评估哪些锁定可逆、哪些不可逆；对不可逆节点给出降低锁定风险的替代选项。","找出方案里的锁定点，区分可逆与不可逆。"],
+  ["M1","分治","machine","inject","将本任务分解为相互独立的子问题，逐一求解后再合并；分解时说明子问题间的边界。","分解为独立子问题，逐个求解再合并。"],
+  ["M2","记忆化 / 动态规划","machine","inject","记录本会话中已推导出的结论，遇到相同子问题时直接复用，避免重复推导。","复用已推导的结论，不重复推导。"],
+  ["M3","贪心（快速近似）","machine","inject","如需快速结果，先给出每步局部最优的贪心近似解，并标注该近似是否保证全局最优。","先给局部最优的快速近似解，并标注是否最优。"],
+  ["M4","缓存与局部性","machine","inject","优先复用近期上下文中已有的结论与信息；引用前校验其时效性。","优先复用近期结论，引用前校验时效。"],
+  ["M5","流水线与并行","machine","inject","识别可并行推进的独立子任务，同时推进；勿对存在串行依赖的部分强行并行。","识别可并行的子任务，同时推进。"],
+  ["M6","近似","machine","inject","若精确解代价过高，可给出带误差界的近似解，并显式说明牺牲了多少精度。","允许带误差界的近似，但要说清牺牲了什么。"],
+  ["M7","剪枝","machine","inject","先排除已被证明不可行或被支配的候选分支，聚焦高价值路径再深入。","先排除不可行分支，聚焦高价值路径。"],
+  ["M8","随机化","machine","inject","当输入可能具有对抗性或需要多样性时，引入随机采样并多次取期望，避免最坏情况。","必要时多角度采样，避免最坏情况。"],
+  ["M9","状态抽象","machine","inject","识别真正影响后续决策的少数关键变量（充分统计量），只围绕它们推理，丢弃无关细节。","只保留影响决策的关键变量，丢弃无关细节。"],
+  ["M10","反馈控制","machine","inject","输出前对照任务目标清单检查偏差并修正；输出后自查是否有遗漏的关键项。","输出前对照目标检查，输出后自查遗漏。"],
+  ["M11","涌现与自组织","machine","inject","进行系统设计时，优先设计局部规则与交互结构，让全局协调自发生成，而非集中式调度。","设计局部规则让协调自发生成，而非集中调度。"],
+  ["M12","奥卡姆剃刀","machine","inject","在解释力与预测力相当的前提下，优先选择假设更少、结构更简单的方案。","解释力相当时选假设最少的方案。"],
+];
+
+// id, 名称, 核心词(权重2), 普通词(权重1), 人类侧, 机器侧
+const S = [
+  ["learning","学习新知识",["学习","理解","搞懂","教我","learn","understand"],["是什么","概念","原理","入门","怎么学","explain"],["H1","H2"],["M9","M2"]],
+  ["planning","制定计划",["计划","规划","项目","方案","设计","plan","project","design"],["排期","里程碑","架构","路线图"],["H9","H4","H5"],["M1","M7","M10"]],
+  ["decision","重大决策",["要不要","该不该","选哪个","决策","决定"],["对比","权衡","值不值","纠结"],["H6","H13"],["M12","M8"]],
+  ["debugging","调试排错",["报错","bug","异常","调试","error","crash"],["不工作","失败","错误","崩溃","排查"],["H2"],["M7","M4","M10"]],
+  ["writing","写作创作",["写","文章","报告","文案","文档"],["总结","介绍","讲稿"],["H1","H10"],["M12","M9"]],
+  ["coding","开发功能",["开发","实现","功能","代码","接口"],["页面","组件","api"],["H4","H5"],["M1","M3","M5"]],
+  ["refactor","重构优化",["重构","优化","简化"],["整理","性能优化","代码质量"],["H4","H9"],["M7","M10"]],
+  ["research","调研查证",["调研","查证","验证","research","verify"],["搜索","对比","收集","事实核查"],["H5","H12"],["M4","M7","M8"]],
+  ["review","复盘总结",["复盘","回顾","总结教训"],["沉淀","周报"],["H8","H12"],["M10","M2"]],
+];
+
+const MODES = {
+  efficiency: { label: "效率优先", usage: "简单查询、重复任务、上下文紧张、快速草稿", maxMachine: 2, maxHuman: 1, maxScenarios: 1, short: true, evidence: 0, selfCheck: 1, assumptions: "key" },
+  balanced: { label: "均衡", usage: "日常任务、中等复杂度", maxMachine: 3, maxHuman: 3, maxScenarios: 2, short: false, evidence: 1, selfCheck: 1, assumptions: "key" },
+  accuracy: { label: "准确度优先", usage: "决策、代码、事实核查、对外交付物、高风险", maxMachine: 4, maxHuman: 4, maxScenarios: 2, short: false, evidence: 2, selfCheck: 2, assumptions: "all" },
+};
+
+const byId = new Map(T.map(t => [t[0], t]));
+const state = { mode: "balanced", picked: new Set(), auto: { human: [], machine: [] } };
+
+const $ = id => document.getElementById(id);
+const modeNames = Object.keys(MODES);
+
+function renderModes() {
+  $("modes").innerHTML = modeNames.map(id => {
+    const m = MODES[id];
+    return `<button class="mode ${state.mode === id ? "on" : ""}" data-mode="${id}">
+      <b>${m.label}</b><small>${m.usage}</small></button>`;
+  }).join("");
+  $("modes").querySelectorAll("button").forEach(btn => {
+    btn.addEventListener("click", () => { state.mode = btn.dataset.mode; renderAll(); });
+  });
+}
+
+function detect(text) {
+  const hay = text.toLowerCase();
+  const hits = [];
+  for (const [id, name, core, words] of S) {
+    let score = 0; const matched = [];
+    for (const w of core) if (hay.includes(w.toLowerCase())) { score += 2; matched.push(w); }
+    for (const w of words) if (hay.includes(w.toLowerCase())) { score += 1; matched.push(w); }
+    if (matched.length === 0) continue;
+    const c = Math.min(1, score / 3);
+    if (c >= 0.4) hits.push({ id, name, c, matched });
+  }
+  return hits.sort((a, b) => b.c - a.c);
+}
+
+function computeAuto() {
+  const policy = MODES[state.mode];
+  const text = $("input").value.trim();
+  const hits = text ? detect(text).slice(0, policy.maxScenarios) : [];
+  const human = [], machine = [];
+  for (const hit of hits) {
+    const row = S.find(s => s[0] === hit.id);
+    if (!row) continue;
+    human.push(...row[4]); machine.push(...row[5]);
+  }
+  state.auto = {
+    human: [...new Set(human)].slice(0, policy.maxHuman),
+    machine: [...new Set(machine)].slice(0, policy.maxMachine),
+  };
+  return hits;
+}
+
+function renderChips() {
+  const policy = MODES[state.mode];
+  const build = (side, target) => {
+    const rows = T.filter(t => t[2] === side);
+    $(target).innerHTML = rows.map(t => {
+      const on = state.picked.has(t[0]);
+      const auto = !on && state.auto[side].includes(t[0]);
+      return `<button class="chip ${on ? "on" : ""} ${auto ? "auto" : ""}" data-id="${t[0]}" title="${t[3]}">
+        ${t[1]}<small>${t[0]}</small></button>`;
+    }).join("");
+    $(target).querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.id;
+        if (state.picked.has(id)) state.picked.delete(id); else state.picked.add(id);
+        renderChips(); updateCap();
+      });
+    });
+  };
+  build("human", "humanChips");
+  build("machine", "machineChips");
+  updateCap();
+}
+
+function updateCap() {
+  const p = MODES[state.mode];
+  const h = state.picked.size ? countSide("human") : Math.min(state.auto.human.length, p.maxHuman);
+  const m = state.picked.size ? countSide("machine") : Math.min(state.auto.machine.length, p.maxMachine);
+  $("cap").textContent = `本模式上限：人类侧 ${p.maxHuman} 条 / 机器侧 ${p.maxMachine} 条`;
+}
+
+function countSide(side) {
+  return [...state.picked].filter(id => byId.get(id)[2] === side).length;
+}
+
+function renderDetect() {
+  const hits = computeAuto();
+  if (!hits.length) {
+    $("detect").innerHTML = $("input").value.trim()
+      ? "未命中预置场景 → 按通用执行处理（仅注入反馈控制）"
+      : "输入后自动识别场景";
+    return;
+  }
+  $("detect").innerHTML = "检测到：" + hits.map(h =>
+    `<b>${h.name}</b>（${h.c.toFixed(2)}）`).join(" · ") + " — 已预选对应思想";
+}
+
+function resolveIds() {
+  const p = MODES[state.mode];
+  const human = [], machine = [];
+  for (const id of state.picked) {
+    const t = byId.get(id);
+    if (t[2] === "human") human.push(id); else machine.push(id);
+  }
+  // 未被用户覆盖的那一侧，用自动推荐补齐到上限
+  if (human.length === 0) human.push(...state.auto.human.slice(0, p.maxHuman));
+  if (machine.length === 0) machine.push(...state.auto.machine.slice(0, p.maxMachine));
+  return { human: [...new Set(human)], machine: [...new Set(machine)] };
+}
+
+function generate() {
+  const text = $("input").value.trim();
+  if (!text) { $("input").focus(); return; }
+  const p = MODES[state.mode];
+  const ids = resolveIds();
+  const human = ids.human.map(id => byId.get(id));
+  const machine = ids.machine.map(id => byId.get(id));
+
+  const sections = human.map(t => `【${t[1]}】${p.short ? t[5] : t[4]}`);
+  if (human.length) {
+    sections.push(p.assumptions === "all"
+      ? "【假设标注】把内容分为「已确认事实」「未验证假设」「缺失信息」三类标注；没有证据支持的一律标为假设。"
+      : "【假设标注】会改变结论的关键假设请显式标注，不要写成事实。");
+  }
+  $("out").textContent = human.length
+    ? `【任务】${text}\n\n${sections.join("\n\n")}`
+    : text;
+
+  const sysLines = machine.map(t => `- ${t[1]}：${p.short ? t[5] : t[4]}`);
+  const checks = [];
+  if (p.evidence >= 1) checks.push("关键结论至少 1 条依据");
+  if (p.evidence >= 2) checks.push("关键结论至少 2 条独立证据链");
+  checks.push(`输出自检 ${p.selfCheck} 次`);
+  $("sys").textContent = machine.length
+    ? `[promat] 模式：${p.label}。以下为内部推理指令，不在回复中复述：\n${sysLines.join("\n")}\n- 校验：${checks.join("；")}。`
+    : "（本模式未选择机器侧思想）";
+
+  $("stat").textContent = `人类侧 ${human.length} 条 · 机器侧 ${machine.length} 条 · ${p.label}`;
+  $("outCard").hidden = false;
+  $("outCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function toast(msg) {
+  const el = $("toast");
+  el.textContent = msg;
+  el.classList.add("on");
+  setTimeout(() => el.classList.remove("on"), 1400);
+}
+
+$("gen").addEventListener("click", generate);
+$("clear").addEventListener("click", () => { state.picked.clear(); renderChips(); });
+$("copy").addEventListener("click", async () => {
+  const value = $("out").textContent;
+  try {
+    await navigator.clipboard.writeText(value);
+    toast("已复制增强提示词");
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = value; document.body.appendChild(area); area.select();
+    document.execCommand("copy"); area.remove();
+    toast("已复制增强提示词");
+  }
+});
+$("input").addEventListener("input", () => { renderDetect(); renderChips(); });
+
+function renderAll() { renderModes(); renderDetect(); renderChips(); }
+renderAll();
+</script>
+</body>
+</html>
