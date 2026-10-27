@@ -16,12 +16,13 @@ First public release. Internally this project was codenamed **Promat**; the publ
 ### Changed
 - Placeholders may occupy a *value*, never a *section*. Deliverables must be usable after replacing values only — this reverses the earlier behaviour that handed back blank forms.
 - A small operational fault no longer receives a delivery contract. Structured-but-unhelpful was measurably worse than direct.
+- `demo/index.html` is now bilingual (中/EN toggle). All 25 thinking models and 9 scenarios have English names, templates and keyword sets; scenario detection matches Chinese and English input regardless of the interface language.
 
 ### Known issues
 - **No benchmark run at 1.6.0.** The published measurement (−1.39) is from the 1.5.x line. Do not attribute it to this version.
-- `demo/index.html` is Chinese-first; English templates are not done.
 - The decision scenario has no expanded pack — it falls back to the generic kernel.
 - `profile` layer (terminology, example domain, tone) is specified but not implemented.
+- `demo/index.html` has no automated browser test. The script is syntax-checked and its data coverage is audited (`window.__audit()`), but rendering is verified by eye only.
 
 ---
 

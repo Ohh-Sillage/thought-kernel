@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ThoughtKernel · 思想内核 — prompt compiler</title>
+<title>ThoughtKernel · 思想内核</title>
+<meta name="description" content="25 thinking models for LLMs, injected as constraints instead of rewriting prompts. Prompt compiler demo.">
 <style>
   :root {
     --ink: #18181b; --muted: #71717a; --line: #e4e4e7;
@@ -78,52 +79,57 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>ThoughtKernel · 思想内核</h1>
-  <div class="sub">选模式 → 选思想（或让场景自动识别）→ 生成增强提示词 → 粘贴给模型<br><span style="font-size:11px">Thoughts are the kernel. Skills are just drivers.</span></div>
+  <div style="display:flex;align-items:flex-start;gap:8px">
+    <div style="flex:1">
+      <h1 id="h1">ThoughtKernel · 思想内核</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <button class="btn ghost" id="langBtn" style="padding:5px 11px;font-size:12px;flex:none">EN</button>
+  </div>
 
   <div class="card">
-    <div class="label">提示词模式</div>
+    <div class="label" id="modeLabel"></div>
     <div class="modes" id="modes"></div>
   </div>
 
   <div class="card">
-    <div class="label">原始请求</div>
-    <textarea id="input" placeholder="例如：请帮我设计一个旅游网站"></textarea>
-    <div class="detect" id="detect">输入后自动识别场景</div>
+    <div class="label" id="inputLabel"></div>
+    <textarea id="input"></textarea>
+    <div class="detect" id="detect"></div>
   </div>
 
   <div class="card">
-    <div class="label">附加思想（可多选，虚线为自动推荐）</div>
-    <div class="group">人类侧 · 改造提问与交互方式</div>
+    <div class="label" id="thoughtsLabel"></div>
+    <div class="group" id="groupHuman"></div>
     <div class="chips" id="humanChips"></div>
-    <div class="group">机器侧 · 内部推理指令（不进入提示词正文）</div>
+    <div class="group" id="groupMachine"></div>
     <div class="chips" id="machineChips"></div>
     <div class="row">
-      <button class="btn" id="gen">生成增强提示词</button>
-      <button class="btn ghost" id="clear">清空选择</button>
+      <button class="btn" id="gen"></button>
+      <button class="btn ghost" id="clear"></button>
       <span class="hint" id="cap"></span>
     </div>
   </div>
 
   <div class="card" id="outCard" hidden>
-    <div class="label">增强提示词（人类侧段落）</div>
+    <div class="label" id="outLabel"></div>
     <pre id="out"></pre>
     <div class="row">
-      <button class="btn" id="copy">复制</button>
+      <button class="btn" id="copy"></button>
       <span class="hint" id="stat"></span>
     </div>
     <details class="sysbox">
-      <summary>查看机器侧注入指令（静默部分）</summary>
+      <summary id="sysLabel"></summary>
       <pre id="sys" style="margin-top:8px"></pre>
     </details>
   </div>
 </div>
-<div class="toast" id="toast">已复制</div>
+<div class="toast" id="toast"></div>
 
 <script>
 "use strict";
 
-// id, 名称, 侧, 模式, 完整模板, 短指令
+/* --- data --- */
 const T = [
   ["H1","费曼学习法","human","interactive","我刚学完【概念】，请陪我完成三轮学习。第一轮你扮演完全不懂这个领域的小白，我用自己的话讲给你听，听不懂就打断我。第二轮你扮演专家或辩手，尖锐批判我的理解，重点查边界、缺点、风险和成立前提。第三轮我们把这个概念用到真实问题里。不要一开始就替我讲答案，每轮完成后再进入下一轮。","我讲你听，卡住就打断，再让专家挑错，最后一起用。"],
   ["H2","苏格拉底追问","human","interactive","我先说自己的看法。你每次只问我一个问题，围绕我的依据、证据、前提、反例、边界和影响继续追问，我回答后再继续。等我把思路理清楚、说清楚后，再帮我总结。","每次只问一个问题，追我的依据和前提，最后总结。"],
@@ -152,7 +158,6 @@ const T = [
   ["M12","奥卡姆剃刀","machine","inject","在解释力与预测力相当的前提下，优先选择假设更少、结构更简单的方案。","解释力相当时选假设最少的方案。"],
 ];
 
-// id, 名称, 核心词(权重2), 普通词(权重1), 人类侧, 机器侧
 const S = [
   ["learning","学习新知识",["学习","理解","搞懂","教我","learn","understand"],["是什么","概念","原理","入门","怎么学","explain"],["H1","H2"],["M9","M2"]],
   ["planning","制定计划",["计划","规划","项目","方案","设计","plan","project","design"],["排期","里程碑","架构","路线图"],["H9","H4","H5"],["M1","M7","M10"]],
@@ -166,22 +171,164 @@ const S = [
 ];
 
 const MODES = {
-  efficiency: { label: "效率优先", usage: "简单查询、重复任务、上下文紧张、快速草稿", maxMachine: 2, maxHuman: 1, maxScenarios: 1, short: true, evidence: 0, selfCheck: 1, assumptions: "key" },
-  balanced: { label: "均衡", usage: "日常任务、中等复杂度", maxMachine: 3, maxHuman: 3, maxScenarios: 2, short: false, evidence: 1, selfCheck: 1, assumptions: "key" },
-  accuracy: { label: "准确度优先", usage: "决策、代码、事实核查、对外交付物、高风险", maxMachine: 4, maxHuman: 4, maxScenarios: 2, short: false, evidence: 2, selfCheck: 2, assumptions: "all" },
+  efficiency: { label: { zh: "效率优先", en: "Efficiency" }, usage: { zh: "简单查询、重复任务、上下文紧张、快速草稿", en: "Lookups, repetition, tight context, quick drafts" }, maxMachine: 2, maxHuman: 1, maxScenarios: 1, short: true, evidence: 0, selfCheck: 1, assumptions: "key" },
+  balanced:   { label: { zh: "均衡", en: "Balanced" },   usage: { zh: "日常任务、中等复杂度", en: "Everyday work, medium complexity" }, maxMachine: 3, maxHuman: 3, maxScenarios: 2, short: false, evidence: 1, selfCheck: 1, assumptions: "key" },
+  accuracy:   { label: { zh: "准确度优先", en: "Accuracy" }, usage: { zh: "决策、代码、事实核查、对外交付物、高风险", en: "Decisions, code, fact-checks, external deliverables" }, maxMachine: 4, maxHuman: 4, maxScenarios: 2, short: false, evidence: 2, selfCheck: 2, assumptions: "all" },
 };
 
+const EN = {
+  H1: { name: "Feynman technique", tpl: "I've just finished learning about <concept>. Walk me through three rounds. Round 1: you play someone with no background in this field, and I explain it in my own words; interrupt whenever you don't follow. Round 2: you play an expert or a hostile critic and attack my understanding — boundary cases, weaknesses, risks, hidden premises. Round 3: we apply the concept to a real problem. Don't give me the answer up front; move to the next round only after this one is done.", short: "I explain, you interrupt when lost, an expert attacks it, then we apply it." },
+  H2: { name: "Socratic questioning", tpl: "I'll state my view first. Ask me exactly one question at a time, following my evidence, premises, counter-examples, boundaries and consequences; wait for my answer before asking the next. Once my reasoning is clear, summarise it.", short: "One question at a time, chase my evidence and premises, then summarise." },
+  H3: { name: "Fable learning", tpl: "Turn <concept> into a story. Tell the story without revealing the concept; afterwards reveal it, map each story element to a concept element, and say exactly where the analogy breaks down.", short: "Teach it as a fable, reveal at the end, state where the analogy fails." },
+  H4: { name: "Reverse interview", tpl: "Don't start yet. Work out what I haven't told you that would change the outcome, and ask me the single most important question, one at a time. Once you know what I want, what must not change, and how I'll judge success, restate the full requirement for me to confirm — then begin.", short: "Ask what's missing, one at a time; restate and confirm before starting." },
+  H5: { name: "Blind-spot scan", tpl: "Don't execute yet. List the questions I did not raise that could change the result, ordered by impact, each with a reason. Ask me one at a time where a human decision is needed; mark anything unevidenced as an assumption instead of deciding for me.", short: "Not yet — list what I didn't ask that changes the result, ranked." },
+  H6: { name: "Both-sides argument", tpl: "On whether to <decision>: build the strongest possible case for it, then the strongest possible case against it. Don't decide for me. Separate verifiable facts, unconfirmed assumptions, and missing information, and finish with three low-cost real-world tests.", short: "Strongest case both ways; don't decide for me." },
+  H7: { name: "AI self-scan", tpl: "Read whatever conversation history and memory about me you can access. From the things I keep returning to, quietly avoid, or said I'd do but never did, generate 10 questions I may least want to face but should answer, citing the evidence behind each. Don't encourage me, don't diagnose, don't answer for me.", short: "From my history, 10 questions I'm avoiding." },
+  H8: { name: "History retro", tpl: "Read the task and project history you can access. Find work I repeat, places I keep redoing, requirements I keep re-adding. Pick the three most worth packaging into a workflow — reason, context, key steps, acceptance criteria. Propose first; create only after I pick.", short: "From my history, three workflows worth packaging." },
+  H9: { name: "Red team / pre-mortem", tpl: "Before <plan> is executed, take an adversarial stance and find the three most likely ways it fails, ranked by probability times loss; give a mitigation or avoidance for each.", short: "Three most likely failure modes, with mitigations." },
+  H10: { name: "Checklist", tpl: "Produce an externalised checklist for <process>: the steps most likely to be dropped under high cognitive load, as a fixed sequence, each with the consequence of dropping it.", short: "Fixed checklist of easy-to-miss steps and their cost." },
+  H11: { name: "Spaced retrieval", tpl: "Design a spaced-repetition plan for <topic>: review points scheduled near forgetting (e.g. day 1 / 3 / 7 / 21), each round starting with retrieval before filling gaps. Mark what suits massed practice and what suits spacing.", short: "Days 1/3/7/21, retrieval before review." },
+  H12: { name: "Metacognitive review", tpl: "After this task, run a second-order review of the process itself: which strategy worked, which was wasteful, where cognitive effort went badly — and what to change next time.", short: "Review the strategy itself, not just the answer." },
+  H13: { name: "Path dependence", tpl: "Before <decision>, identify where sunk cost, increasing returns or coordination inertia have locked in my current approach. Separate reversible from irreversible locks, and for every irreversible node offer an alternative that lowers lock-in risk.", short: "Find the lock-in points; separate reversible from irreversible." },
+  M1: { name: "Divide and conquer", tpl: "Decompose the task into independent sub-problems, solve each, then merge; state the boundary between sub-problems.", short: "Split into independent parts, solve, merge." },
+  M2: { name: "Memoization", tpl: "Record conclusions already derived in this session and reuse them when the same sub-problem reappears; do not re-derive.", short: "Reuse what's already been derived." },
+  M3: { name: "Greedy", tpl: "If speed matters, give the locally optimal solution first and state whether the greedy choice is provably optimal here.", short: "Fast locally-optimal answer, labelled as such." },
+  M4: { name: "Cache and locality", tpl: "Prefer reusing conclusions and facts already present in recent context; verify their freshness before relying on them.", short: "Reuse recent context; verify freshness first." },
+  M5: { name: "Pipeline and parallel", tpl: "Identify sub-tasks that can proceed in parallel and advance them together; never parallelise parts that have a serial dependency.", short: "Parallelise independent parts only." },
+  M6: { name: "Approximation", tpl: "If the exact answer is too costly, give an approximation with an explicit error bound, and say exactly what precision was traded away.", short: "Approximate, but state the error bound." },
+  M7: { name: "Pruning", tpl: "First eliminate branches already shown to be infeasible or dominated; then go deep on the high-value path.", short: "Cut infeasible branches first, then go deep." },
+  M8: { name: "Randomisation", tpl: "When input may be adversarial or diversity matters, sample several times and take the expectation rather than optimising blindly for the worst case.", short: "Sample several angles; don't over-fit one." },
+  M9: { name: "State abstraction", tpl: "Identify the few variables that actually determine later decisions (the sufficient statistics) and reason only about those; discard the rest.", short: "Keep only decision-relevant variables." },
+  M10: { name: "Feedback control", tpl: "Before emitting, check the output against the goal checklist and correct drift; after emitting, self-check for missing key items.", short: "Check against goals before sending." },
+  M11: { name: "Emergence", tpl: "For system design, prefer local rules and interaction structure that let global coordination emerge, over centralised orchestration.", short: "Design local rules; let coordination emerge." },
+  M12: { name: "Occam's razor", tpl: "When explanatory power is equal, choose the option with fewer assumptions and simpler structure.", short: "Fewest assumptions wins ties." },
+};
+
+const S_EN = {
+  learning:  { name: "Learning",  core: ["learn", "understand", "teach me", "explain", "how does"], words: ["what is", "concept", "beginner", "intuition", "why does"] },
+  planning:  { name: "Planning",  core: ["plan", "roadmap", "design a", "schedule", "milestone"], words: ["project", "architecture", "timeline", "scope", "launch"] },
+  decision:  { name: "Decision",  core: ["should i", "which one", "worth it", "decide", "choose"], words: ["compare", "trade-off", "versus", "options", "take the offer"] },
+  debugging: { name: "Debugging", core: ["error", "bug", "crash", "not working", "exception"], words: ["fails", "failing", "broken", "traceback", "hangs", "flicker"] },
+  writing:   { name: "Writing",   core: ["write", "article", "report", "copy", "draft"], words: ["summarise", "summarize", "rewrite", "tone", "announcement"] },
+  coding:    { name: "Coding",    core: ["implement", "add a feature", "endpoint", "function", "component"], words: ["api", "page", "class", "script", "build", "returns 422"] },
+  refactor:  { name: "Refactor",  core: ["refactor", "simplify", "optimi"], words: ["clean up", "duplication", "performance", "code quality", "technical debt"] },
+  research:  { name: "Research",  core: ["research", "survey", "verify", "fact-check"], words: ["collect", "sources", "evidence", "is it true", "look into"] },
+  review:    { name: "Review",    core: ["retro", "post-mortem", "what went wrong", "lessons"], words: ["wrap up", "weekly report", "look back", "went wrong"] },
+};
+
+const L = {
+  zh: {
+    title: "ThoughtKernel · 思想内核",
+    sub: "选模式 → 选思想（或让场景自动识别）→ 生成增强提示词 → 粘贴给模型",
+    tagline: "Thoughts are the kernel. Skills are just drivers.",
+    modeLabel: "提示词模式",
+    inputLabel: "原始请求",
+    placeholder: "例如：请帮我设计一个旅游网站",
+    thoughtsLabel: "附加思想（可多选，虚线为自动推荐）",
+    groupHuman: "人类侧 · 改造提问与交互方式",
+    groupMachine: "机器侧 · 内部推理指令（不进入提示词正文）",
+    gen: "生成增强提示词",
+    clear: "清空选择",
+    cap: "本模式上限：人类侧 {h} 条 / 机器侧 {m} 条",
+    detectIdle: "输入后自动识别场景",
+    detectNone: "未命中预置场景 → 按通用执行处理（仅注入反馈控制）",
+    detectHit: "检测到：{s} — 已预选对应思想",
+    outLabel: "增强提示词（人类侧段落）",
+    copy: "复制",
+    sysLabel: "查看机器侧注入指令（静默部分）",
+    copied: "已复制增强提示词",
+    task: "【任务】",
+    assumptionAll: "【假设标注】把内容分为「已确认事实」「未验证假设」「缺失信息」三类标注；没有证据支持的一律标为假设。",
+    assumptionKey: "【假设标注】会改变结论的关键假设请显式标注，不要写成事实。",
+    sysHead: "[thought-kernel] 模式：{m}。以下为内部推理指令，不在回复中复述：",
+    sysNone: "（本模式未选择机器侧思想）",
+    stat: "人类侧 {h} 条 · 机器侧 {m} 条 · {mode}",
+    check1: "关键结论至少 1 条依据",
+    check2: "关键结论至少 2 条独立证据链",
+    checkN: "输出自检 {n} 次",
+    checks: "校验：{s}。",
+    switchTo: "EN"
+  },
+  en: {
+    title: "ThoughtKernel · thinking kernel for LLMs",
+    sub: "Pick a mode → pick models (or let scenarios auto-detect) → generate → paste into your model",
+    tagline: "Thoughts are the kernel. Skills are just drivers.",
+    modeLabel: "Mode",
+    inputLabel: "Your request",
+    placeholder: "e.g. design a travel booking site for me",
+    thoughtsLabel: "Thinking models (multi-select; dashed = auto-recommended)",
+    groupHuman: "Human side · reshapes how you ask",
+    groupMachine: "Machine side · silent reasoning directives (never in the visible prompt)",
+    gen: "Generate enhanced prompt",
+    clear: "Clear",
+    cap: "Mode caps: {h} human / {m} machine",
+    detectIdle: "Scenario is detected as you type",
+    detectNone: "No scenario matched → generic execution (feedback control only)",
+    detectHit: "Detected: {s} — models pre-selected",
+    outLabel: "Enhanced prompt (human-side section)",
+    copy: "Copy",
+    sysLabel: "Show machine-side directives (silent part)",
+    copied: "Enhanced prompt copied",
+    task: "TASK: ",
+    assumptionAll: "ASSUMPTIONS: label content as confirmed fact / unverified assumption / missing information. Anything without evidence is an assumption.",
+    assumptionKey: "ASSUMPTIONS: explicitly label any premise that would change the conclusion; do not state it as fact.",
+    sysHead: "[thought-kernel] mode: {m}. Internal reasoning directives — do not restate these in the reply:",
+    sysNone: "(no machine-side models selected in this mode)",
+    stat: "{h} human · {m} machine · {mode}",
+    check1: "at least 1 source per key claim",
+    check2: "at least 2 independent evidence chains per key claim",
+    checkN: "self-check {n} time(s)",
+    checks: "Checks: {s}.",
+    switchTo: "中文"
+  }
+};
+
+// --- logic ---
 const byId = new Map(T.map(t => [t[0], t]));
 const state = { mode: "balanced", picked: new Set(), auto: { human: [], machine: [] } };
+let lang = "zh";
 
 const $ = id => document.getElementById(id);
-const modeNames = Object.keys(MODES);
+const L_ = () => L[lang];
+const fmt = (s, o) => s.replace(/\{(\w+)\}/g, (_, k) => (o[k] ?? ""));
+const nm = t => (lang === "en" && EN[t[0]] ? EN[t[0]].name : t[1]);
+const tp = t => (lang === "en" && EN[t[0]] ? EN[t[0]].tpl : t[4]);
+const sh = t => (lang === "en" && EN[t[0]] ? EN[t[0]].short : t[5]);
+const modeName = id => MODES[id].label[lang];
+
+/* --- self-test hook: verifies every thought and scenario has an EN entry --- */
+function audit() {
+  const missing = [];
+  for (const t of T) if (!EN[t[0]] || !EN[t[0]].name || !EN[t[0]].tpl || !EN[t[0]].short) missing.push(t[0]);
+  for (const row of S) if (!S_EN[row[0]] || !S_EN[row[0]].name) missing.push(row[0]);
+  return missing;
+}
+
+function applyLabels() {
+  const l = L_();
+  document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+  document.title = l.title;
+  $("h1").textContent = l.title;
+  $("sub").innerHTML = `${l.sub}<br><span style="font-size:11px">${l.tagline}</span>`;
+  $("modeLabel").textContent = l.modeLabel;
+  $("inputLabel").textContent = l.inputLabel;
+  $("input").placeholder = l.placeholder;
+  $("thoughtsLabel").textContent = l.thoughtsLabel;
+  $("groupHuman").textContent = l.groupHuman;
+  $("groupMachine").textContent = l.groupMachine;
+  $("gen").textContent = l.gen;
+  $("clear").textContent = l.clear;
+  $("outLabel").textContent = l.outLabel;
+  $("copy").textContent = l.copy;
+  $("sysLabel").textContent = l.sysLabel;
+  $("langBtn").textContent = l.switchTo;
+}
 
 function renderModes() {
-  $("modes").innerHTML = modeNames.map(id => {
+  $("modes").innerHTML = Object.keys(MODES).map(id => {
     const m = MODES[id];
     return `<button class="mode ${state.mode === id ? "on" : ""}" data-mode="${id}">
-      <b>${m.label}</b><small>${m.usage}</small></button>`;
+      <b>${m.label[lang]}</b><small>${m.usage[lang]}</small></button>`;
   }).join("");
   $("modes").querySelectorAll("button").forEach(btn => {
     btn.addEventListener("click", () => { state.mode = btn.dataset.mode; renderAll(); });
@@ -191,13 +338,17 @@ function renderModes() {
 function detect(text) {
   const hay = text.toLowerCase();
   const hits = [];
-  for (const [id, name, core, words] of S) {
+  for (const row of S) {
+    const [id, nameZh, coreZh, wordsZh] = row;
+    const en = S_EN[id] || { core: [], words: [] };
+    const core = [...coreZh, ...(en.core || [])];
+    const words = [...wordsZh, ...(en.words || [])];
     let score = 0; const matched = [];
-    for (const w of core) if (hay.includes(w.toLowerCase())) { score += 2; matched.push(w); }
-    for (const w of words) if (hay.includes(w.toLowerCase())) { score += 1; matched.push(w); }
+    for (const w of core) if (hay.includes(String(w).toLowerCase())) { score += 2; matched.push(w); }
+    for (const w of words) if (hay.includes(String(w).toLowerCase())) { score += 1; matched.push(w); }
     if (matched.length === 0) continue;
     const c = Math.min(1, score / 3);
-    if (c >= 0.4) hits.push({ id, name, c, matched });
+    if (c >= 0.4) hits.push({ id, name: lang === "en" ? (S_EN[id] || {}).name || nameZh : nameZh, c, matched });
   }
   return hits.sort((a, b) => b.c - a.c);
 }
@@ -220,14 +371,13 @@ function computeAuto() {
 }
 
 function renderChips() {
-  const policy = MODES[state.mode];
   const build = (side, target) => {
     const rows = T.filter(t => t[2] === side);
     $(target).innerHTML = rows.map(t => {
       const on = state.picked.has(t[0]);
       const auto = !on && state.auto[side].includes(t[0]);
-      return `<button class="chip ${on ? "on" : ""} ${auto ? "auto" : ""}" data-id="${t[0]}" title="${t[3]}">
-        ${t[1]}<small>${t[0]}</small></button>`;
+      return `<button class="chip ${on ? "on" : ""} ${auto ? "auto" : ""}" data-id="${t[0]}">
+        ${nm(t)}<small>${t[0]}</small></button>`;
     }).join("");
     $(target).querySelectorAll("button").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -244,25 +394,18 @@ function renderChips() {
 
 function updateCap() {
   const p = MODES[state.mode];
-  const h = state.picked.size ? countSide("human") : Math.min(state.auto.human.length, p.maxHuman);
-  const m = state.picked.size ? countSide("machine") : Math.min(state.auto.machine.length, p.maxMachine);
-  $("cap").textContent = `本模式上限：人类侧 ${p.maxHuman} 条 / 机器侧 ${p.maxMachine} 条`;
-}
-
-function countSide(side) {
-  return [...state.picked].filter(id => byId.get(id)[2] === side).length;
+  $("cap").textContent = fmt(L_().cap, { h: p.maxHuman, m: p.maxMachine });
 }
 
 function renderDetect() {
+  const l = L_();
   const hits = computeAuto();
   if (!hits.length) {
-    $("detect").innerHTML = $("input").value.trim()
-      ? "未命中预置场景 → 按通用执行处理（仅注入反馈控制）"
-      : "输入后自动识别场景";
+    $("detect").textContent = $("input").value.trim() ? l.detectNone : l.detectIdle;
     return;
   }
-  $("detect").innerHTML = "检测到：" + hits.map(h =>
-    `<b>${h.name}</b>（${h.c.toFixed(2)}）`).join(" · ") + " — 已预选对应思想";
+  const inner = hits.map(h => `<b>${h.name}</b>（${h.c.toFixed(2)}）`).join(" · ");
+  $("detect").innerHTML = fmt(l.detectHit, { s: inner });
 }
 
 function resolveIds() {
@@ -272,7 +415,6 @@ function resolveIds() {
     const t = byId.get(id);
     if (t[2] === "human") human.push(id); else machine.push(id);
   }
-  // 未被用户覆盖的那一侧，用自动推荐补齐到上限
   if (human.length === 0) human.push(...state.auto.human.slice(0, p.maxHuman));
   if (machine.length === 0) machine.push(...state.auto.machine.slice(0, p.maxMachine));
   return { human: [...new Set(human)], machine: [...new Set(machine)] };
@@ -281,33 +423,32 @@ function resolveIds() {
 function generate() {
   const text = $("input").value.trim();
   if (!text) { $("input").focus(); return; }
+  const l = L_();
   const p = MODES[state.mode];
   const ids = resolveIds();
   const human = ids.human.map(id => byId.get(id));
   const machine = ids.machine.map(id => byId.get(id));
 
-  const sections = human.map(t => `【${t[1]}】${p.short ? t[5] : t[4]}`);
+  const br = lang === "en" ? ["[", "] "] : ["【", "】"];
+  const sections = human.map(t => `${br[0]}${nm(t)}${br[1]}${p.short ? sh(t) : tp(t)}`);
   if (human.length) {
-    sections.push(p.assumptions === "all"
-      ? "【假设标注】把内容分为「已确认事实」「未验证假设」「缺失信息」三类标注；没有证据支持的一律标为假设。"
-      : "【假设标注】会改变结论的关键假设请显式标注，不要写成事实。");
+    sections.push(p.assumptions === "all" ? l.assumptionAll : l.assumptionKey);
   }
   $("out").textContent = human.length
-    ? `【任务】${text}\n\n${sections.join("\n\n")}`
+    ? `${l.task}${text}\n\n${sections.join("\n\n")}`
     : text;
 
-  const sysLines = machine.map(t => `- ${t[1]}：${p.short ? t[5] : t[4]}`);
+  const sysLines = machine.map(t => `- ${nm(t)}: ${p.short ? sh(t) : tp(t)}`);
   const checks = [];
-  if (p.evidence >= 1) checks.push("关键结论至少 1 条依据");
-  if (p.evidence >= 2) checks.push("关键结论至少 2 条独立证据链");
-  checks.push(`输出自检 ${p.selfCheck} 次`);
+  if (p.evidence >= 1) checks.push(l.check1);
+  if (p.evidence >= 2) checks.push(l.check2);
+  checks.push(fmt(l.checkN, { n: p.selfCheck }));
   $("sys").textContent = machine.length
-    ? `[promat] 模式：${p.label}。以下为内部推理指令，不在回复中复述：\n${sysLines.join("\n")}\n- 校验：${checks.join("；")}。`
-    : "（本模式未选择机器侧思想）";
+    ? fmt(l.sysHead, { m: modeName(state.mode) }) + "\n" + sysLines.join("\n") + "\n" + fmt(l.checks, { s: checks.join("; ") })
+    : l.sysNone;
 
-  $("stat").textContent = `人类侧 ${human.length} 条 · 机器侧 ${machine.length} 条 · ${p.label}`;
+  $("stat").textContent = fmt(l.stat, { h: human.length, m: machine.length, mode: modeName(state.mode) });
   $("outCard").hidden = false;
-  $("outCard").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function toast(msg) {
@@ -323,18 +464,29 @@ $("copy").addEventListener("click", async () => {
   const value = $("out").textContent;
   try {
     await navigator.clipboard.writeText(value);
-    toast("已复制增强提示词");
+    toast(L_().copied);
   } catch {
     const area = document.createElement("textarea");
     area.value = value; document.body.appendChild(area); area.select();
     document.execCommand("copy"); area.remove();
-    toast("已复制增强提示词");
+    toast(L_().copied);
   }
 });
 $("input").addEventListener("input", () => { renderDetect(); renderChips(); });
+$("langBtn").addEventListener("click", () => {
+  lang = lang === "zh" ? "en" : "zh";
+  renderAll();
+  if (!$("outCard").hidden) generate();
+});
+$("toast").textContent = "";
 
-function renderAll() { renderModes(); renderDetect(); renderChips(); }
-renderAll();
+function renderAll() { applyLabels(); renderModes(); renderDetect(); renderChips(); }
+
+if (typeof window !== "undefined") {
+  window.__audit = audit;
+  window.__test = { detect, computeAuto, generate, setLang: v => { lang = v; renderAll(); } };
+  renderAll();
+}
 </script>
 </body>
 </html>

@@ -161,7 +161,7 @@ python score.py                      # Δ table once you fill in scores.md
 - **No telemetry, no network calls, no key handling.** Plain text in, plain text out.
 - **No "25 techniques will 10x your output".** See the measurement section.
 - **No prompt-injection defence.** If your host is compromised, a text kernel will not save you.
-- **No non-English templates in `demo/` yet.** The scenario packs are bilingual-ready, the panel is Chinese-first. Tracked in [CHANGELOG](CHANGELOG.md).
+- **Not a hosted product.** The panel is a single HTML file with a 中/EN toggle. No account, no server, no tracking.
 
 ---
 
