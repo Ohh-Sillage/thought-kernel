@@ -494,7 +494,9 @@ function applyQuery() {
   if (q) $("input").dispatchEvent(new Event("input"));
   if (p.get("go")) {
     generate();
-    if (p.get("scroll") === "out") $("outCard").scrollIntoView({ block: "start" });
+    const target = p.get("scroll");
+    if (target === "out") $("outCard").scrollIntoView({ block: "start" });
+    else if (target === "req") $("input").closest(".card").scrollIntoView({ block: "start" });
   }
   const sy = p.get("sy");
   if (sy !== null && sy !== "") window.scrollTo(0, Number(sy) || 0);

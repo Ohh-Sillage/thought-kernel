@@ -16,9 +16,9 @@
 ---
 
 <div align="center">
-  <a href="demo/index.html"><img src="docs/images/demo.gif" width="760" alt="The panel: type a request, the scenario is detected, thinking models are pre-selected, and the enhanced prompt is generated"></a>
+  <a href="demo/index.html"><img src="docs/images/demo.png" width="760" alt="Top: a one-line request, with the scenario detected as Planning. Bottom: the enhanced prompt it produced, with red team, reverse interview and blind-spot scan injected."></a>
   <br>
-  <sub>Type a request → the scenario is detected → thinking models are pre-selected → the enhanced prompt is ready to paste. No install, no network.</sub>
+  <sub>One line in. A constrained prompt out. The whole thing runs in your browser — no install, no network.</sub>
 </div>
 
 ---
@@ -62,6 +62,12 @@ Three injection forms — `wrap` (rewrite the prompt's constraints), `inject` (s
 | 📦 **Scenario packs** | 5 | coding, debugging, planning, refactor, writing — 8 fixed fields each |
 
 Machine-side models are algorithms borrowed from CS — divide & conquer, pruning, memoization, state abstraction, feedback control, Occam's razor. They are *injected silently*: the model follows them, it does not narrate them.
+
+<div align="center">
+  <a href="demo/index.html"><img src="docs/images/demo.gif" width="620" alt="The panel in use: typing a request, the scenario being detected, thinking models being pre-selected, and the enhanced prompt being generated"></a>
+  <br>
+  <sub>The full flow, uncut: type → detect → select → generate.</sub>
+</div>
 
 ---
 

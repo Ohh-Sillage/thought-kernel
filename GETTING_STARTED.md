@@ -48,7 +48,7 @@ It is self-contained — no `@references/` links, no host-specific frontmatter. 
 
 **Browser panel.** Open `demo/index.html` (or the Pages URL). Pick a mode, type the request, hit generate, copy the result into any chat. Works offline; no build step; no network calls.
 
-<img src="docs/images/demo.png" width="700" alt="The panel in English: mode cards, request box, auto-detected scenario, thinking-model chips, and the generated prompt">
+<img src="docs/images/demo.png" width="700" alt="Top: a one-line request with the detected scenario. Bottom: the enhanced prompt it generated.">
 
 The panel is bilingual — the toggle sits in the top-right corner. Scenario detection matches both Chinese and English input whichever language the interface is in, so you can leave it on English and paste a Chinese request.
 

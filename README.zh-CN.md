@@ -16,9 +16,9 @@
 ---
 
 <div align="center">
-  <a href="demo/index.html"><img src="docs/images/demo.gif" width="760" alt="面板：输入请求 → 自动识别场景 → 预选思想 → 生成增强提示词"></a>
+  <a href="demo/index.html"><img src="docs/images/demo.png" width="760" alt="上：一句需求，场景被识别为「计划」。下：它生成的增强提示词，其中注入了红队、反向采访、任务盲点扫描。"></a>
   <br>
-  <sub>打一句需求 → 自动识别场景 → 预选思想 → 生成可粘贴的增强提示词。不装东西，不联网。</sub>
+  <sub>一句需求进去，一份带约束的提示词出来。全部在浏览器里跑——不装东西，不联网。</sub>
 </div>
 
 ---
@@ -68,6 +68,12 @@
 | 📦 场景包 | 5 | coding、debugging、planning、refactor、writing，各 8 个固定字段 |
 
 机器侧的 12 项是从计算机科学借来的算法——分治、剪枝、记忆化、状态抽象、反馈控制、奥卡姆剃刀。它们是**静默注入**的：模型照着做，不复述给你听。
+
+<div align="center">
+  <a href="demo/index.html"><img src="docs/images/demo.gif" width="620" alt="面板使用过程：输入请求、识别场景、预选思想、生成增强提示词"></a>
+  <br>
+  <sub>完整流程不剪：输入 → 识别 → 选思想 → 生成。</sub>
+</div>
 
 ---
 
