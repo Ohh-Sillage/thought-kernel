@@ -37,6 +37,7 @@ REQUIRED_SKILL = [
     "skill/references/packs/_contract.md",
 ]
 LINK = re.compile(r"\[[^\]]*\]\(([^)#][^)]*)\)")
+IMG = re.compile(r"""<img[^>]+src=["']([^"']+)["']""", re.IGNORECASE)
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 STALE = re.compile(r"\bpromat\b", re.IGNORECASE)
 
@@ -112,9 +113,10 @@ def check_links() -> None:
         text = md.read_text(encoding="utf-8")
         # strip fenced code blocks so examples are not treated as links
         text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-        for target in LINK.findall(text):
+        targets = LINK.findall(text) + IMG.findall(text)
+        for target in targets:
             target = target.split(" ")[0].strip()
-            if target.startswith(("http://", "https://", "mailto:")):
+            if target.startswith(("http://", "https://", "mailto:", "data:")):
                 continue
             resolved = (md.parent / target).resolve()
             if not resolved.exists():

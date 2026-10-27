@@ -15,6 +15,14 @@
 
 ---
 
+<div align="center">
+  <a href="demo/index.html"><img src="docs/images/demo.gif" width="760" alt="The panel: type a request, the scenario is detected, thinking models are pre-selected, and the enhanced prompt is generated"></a>
+  <br>
+  <sub>Type a request → the scenario is detected → thinking models are pre-selected → the enhanced prompt is ready to paste. No install, no network.</sub>
+</div>
+
+---
+
 ## The problem is not that you don't know Feynman
 
 Everyone has heard of Feynman technique, pre-mortems, and red-teaming. Three things still go wrong in practice:

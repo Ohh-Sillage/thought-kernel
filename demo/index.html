@@ -482,10 +482,29 @@ $("toast").textContent = "";
 
 function renderAll() { applyLabels(); renderModes(); renderDetect(); renderChips(); }
 
+/* URL presets, used for docs screenshots and for linking a worked example:
+   ?lang=en&q=<request>&go=1&scroll=out */
+function applyQuery() {
+  const p = new URLSearchParams(location.search);
+  const want = p.get("lang");
+  if (want === "en" || want === "zh") lang = want;
+  const q = p.get("q");
+  if (q) $("input").value = q;
+  renderAll();
+  if (q) $("input").dispatchEvent(new Event("input"));
+  if (p.get("go")) {
+    generate();
+    if (p.get("scroll") === "out") $("outCard").scrollIntoView({ block: "start" });
+  }
+  const sy = p.get("sy");
+  if (sy !== null && sy !== "") window.scrollTo(0, Number(sy) || 0);
+}
+
 if (typeof window !== "undefined") {
   window.__audit = audit;
   window.__test = { detect, computeAuto, generate, setLang: v => { lang = v; renderAll(); } };
   renderAll();
+  if (typeof location !== "undefined" && location.search) applyQuery();
 }
 </script>
 </body>
